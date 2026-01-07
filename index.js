@@ -9,12 +9,11 @@ import { bareModulePath } from "@mercuryworkshop/bare-as-module3";
 import { baremuxPath } from "@mercuryworkshop/bare-mux/node";
 import wisp from "wisp-server-node";
 
-// scramjet on npm is outdated
-// import { scramjetPath } from "@mercuryworkshop/scramjet";
-
+// Setup Bare server
 const bare = createBareServer("/bare/");
 const app = express();
 
+// Static routes
 app.use(express.static("public"));
 app.use("/uv/", express.static(uvPath));
 app.use("/epoxy/", express.static(epoxyPath));
@@ -23,13 +22,19 @@ app.use("/bareasmodule/", express.static(bareModulePath));
 app.use("/baremux/", express.static(baremuxPath));
 app.use("/scram/", express.static("scramjet"));
 
+// Create HTTP server
 const server = createServer();
 
+// Handle requests
 server.on("request", (req, res) => {
   if (bare.shouldRoute(req)) {
     bare.routeRequest(req, res);
-  } else app(req, res);
+  } else {
+    app(req, res);
+  }
 });
+
+// Handle upgrades (WebSocket / WISP)
 server.on("upgrade", (req, socket, head) => {
   if (bare.shouldRoute(req)) {
     bare.routeUpgrade(req, socket, head);
@@ -38,26 +43,33 @@ server.on("upgrade", (req, socket, head) => {
   } else socket.end();
 });
 
+// Port
 let port = parseInt(process.env.PORT || "");
-
 if (isNaN(port)) port = 8080;
 
-server.on("listening", () => {
+// Listen on both IPv4 and IPv6
+server.listen(port, "::", () => {
   const address = server.address();
 
-  // by default we are listening on 0.0.0.0 (every interface)
-  // we just need to list a few
   console.log("Listening on:");
-  console.log(`\thttp://localhost:${address.port}`);
-  console.log(`\thttp://${hostname()}:${address.port}`);
-  console.log(
-    `\thttp://${
-      address.family === "IPv6" ? `[${address.address}]` : address.address
-    }:${address.port}`
-  );
+
+  // IPv4
+  console.log(`\thttp://0.0.0.0:${address.port} (all IPv4)`);
+  
+  // IPv6
+  console.log(`\thttp://[::]:${address.port} (all IPv6)`);
+
+  // Hostname (local)
+  console.log(`\thttp://${hostname()}:${address.port} (hostname)`);
+
+  // If IPv4-mapped IPv6 is present
+  if (address.family === "IPv6") {
+    const ipv4 = address.address.replace("::ffff:", "");
+    console.log(`\thttp://${ipv4}:${address.port} (IPv4-mapped)`);
+  }
 });
 
-// https://expressjs.com/en/advanced/healthcheck-graceful-shutdown.html
+// Graceful shutdown
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
 
@@ -67,5 +79,3 @@ function shutdown() {
   bare.close();
   process.exit(0);
 }
-
-server.listen(port, "0.0.0.0");
