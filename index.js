@@ -68,6 +68,4 @@ function shutdown() {
   process.exit(0);
 }
 
-server.listen({
-  port,
-});
+server.listen(port, "0.0.0.0");
