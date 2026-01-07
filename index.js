@@ -1,6 +1,7 @@
 import express from "express";
 import { createServer } from "node:http";
 import { hostname } from "node:os";
+import fetch from "node-fetch"; // for public IP detection
 import { uvPath } from "@titaniumnetwork-dev/ultraviolet";
 import { createBareServer } from "@tomphttp/bare-server-node";
 import { epoxyPath } from "@mercuryworkshop/epoxy-transport";
@@ -47,25 +48,30 @@ server.on("upgrade", (req, socket, head) => {
 let port = parseInt(process.env.PORT || "");
 if (isNaN(port)) port = 8080;
 
-// Listen on both IPv4 and IPv6
-server.listen(port, "::", () => {
+// Listen on dual-stack (::)
+server.listen(port, "::", async () => {
   const address = server.address();
-
   console.log("Listening on:");
 
-  // IPv4
-  console.log(`\thttp://0.0.0.0:${address.port} (all IPv4)`);
-  
-  // IPv6
-  console.log(`\thttp://[::]:${address.port} (all IPv6)`);
-
-  // Hostname (local)
+  // Local / hostname
+  console.log(`\thttp://localhost:${address.port} (localhost)`);
   console.log(`\thttp://${hostname()}:${address.port} (hostname)`);
 
-  // If IPv4-mapped IPv6 is present
-  if (address.family === "IPv6") {
-    const ipv4 = address.address.replace("::ffff:", "");
-    console.log(`\thttp://${ipv4}:${address.port} (IPv4-mapped)`);
+  // IPv4 all interfaces
+  console.log(`\thttp://0.0.0.0:${address.port} (all IPv4)`);
+
+  // IPv6 all interfaces
+  console.log(`\thttp://[::]:${address.port} (all IPv6)`);
+
+  // Public IP detection
+  try {
+    const pub4 = await fetch("https://ifconfig.me/ip").then(r => r.text());
+    console.log(`\thttp://${pub4}:${address.port} (public IPv4)`);
+
+    const pub6 = await fetch("https://ifconfig.co/ip").then(r => r.text());
+    if (pub6.includes(":")) console.log(`\thttp://[${pub6}]:${address.port} (public IPv6)`);
+  } catch (err) {
+    console.log("\tUnable to detect public IPs automatically.");
   }
 });
 
